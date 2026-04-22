@@ -1,4 +1,4 @@
-# PINN Super-Resolution
+# PINN Super-Resolution ***
 
 Implementazione modulare di una PINN (Physics-Informed Neural Network) per
 Super-Resolution di una singola immagine. Il problema e' formulato come
