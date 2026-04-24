@@ -243,6 +243,75 @@ inverso. La loss vede solo `y_LR` e i prior.
 
 ---
 
+## Prior appreso da DIV2K (hybrid physics + data)
+
+I prior PDE da soli sono limitati: contengono solo informazione sulla
+**regolarita' locale** (preservare i bordi), non sulle statistiche delle
+immagini naturali. Per avere risultati nettamente piu' nitidi si puo'
+aggiungere un **prior appreso**: un piccolo CNN addestrato su DIV2K a
+fare SR, che entra nella loss PINN come termine di ancoraggio:
+
+```
+L = L_data + alpha(t) * sum_i L_pde_i + lambda_prior * || u_theta - CNN(y_LR) ||^2
+```
+
+La PINN continua a rispettare `P u = y` e la regolarita' PDE, ma e' *tirata*
+verso la predizione appresa dal dataset.
+
+### Workflow
+
+1) **Scarica DIV2K train** (800 immagini 2K, ~3.5 GB, automatico al primo avvio):
+
+```bash
+python -m learned_prior.train --scale 4 --epochs 30
+```
+
+Allenamento dell'`SmallEDSR` (8 residual block, 64 canali) in ~30 min su
+singola GPU media. Uscita in `checkpoints/prior_sr.pt`.
+
+2) **Lancia la PINN con il prior attivo**:
+
+```bash
+python main.py --loss data_lr pde_anisotropic prior_sr --epochs 1500
+```
+
+Il trainer carica `prior_sr.pt`, calcola la predizione sulla LR *una volta*,
+e la usa come target HR per la loss `prior_sr`. Il PDE contribuisce a
+smussare eventuali artefatti della CNN e a mantenere coerenza locale.
+
+### Combo consigliati
+
+```bash
+# Tutto insieme
+python main.py --loss data_lr prior_sr pde_anisotropic reg_tv --epochs 2000
+
+# Se il prior CNN e' buono, PDE puo' restare leggero (reg. di coerenza)
+python main.py --loss data_lr prior_sr pde_anisotropic --epochs 1500
+```
+
+### Note numeriche sul prior appreso
+
+- Il prior e' **statico** durante il training PINN: si calcola la sua
+  predizione una volta sulla LR osservata, non si ri-valuta.
+- Gradienti sul prior CNN sono disabilitati (`requires_grad_(False)`).
+- Il peso `lambda_prior` (default 1.0) regola quanto la PINN "si fida"
+  del CNN. Se il CNN sbaglia (es. ha allucinato dettagli), abbassalo a
+  0.1; se e' affidabile, tienilo a 1.0 o oltre.
+- Il CNN apprende con L1 sui patch HR di DIV2K: output tipico PSNR
+  ~27-29 dB su Set5 ×4 (ben oltre il limite zero-shot dei prior PDE,
+  ~21-22 dB).
+
+### Cosa guadagni (e cosa perdi)
+
+Guadagni: +5-7 dB di PSNR, bordi *realistici* (non solo netti) perche' il
+CNN ha imparato le statistiche di immagini vere.
+
+Perdi: il metodo non e' piu' zero-shot puro — dipendi dalla distribuzione
+di DIV2K. Se il tuo caso applicativo (microscopia, medical imaging) ha
+statistiche diverse, re-addestra il prior sul tuo dominio.
+
+---
+
 ## Aggiungere una nuova loss
 
 Bastano 3 righe. In un file nuovo dentro `losses/`:

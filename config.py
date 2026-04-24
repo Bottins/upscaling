@@ -38,7 +38,12 @@ class LossConfig:
         "bc_neumann":       1e-3,
         "reg_tv":           2e-3,
         "pde_shock":        5e-3,
+        "reg_hessian":      5e-3,     # LLT (4 ordine): rampe lisce, anti-staircase
+        "pde_aniso4":       2e-2,     # You-Kaveh 4 ordine edge-aware
+        "prior_sr":         1.0,    # prior appreso (CNN pretrainato su DIV2K)
     })
+    # checkpoint del prior appreso (usato solo se 'prior_sr' e' fra i termini)
+    prior_ckpt: str = "./checkpoints/prior_sr.pt"
     # Perona-Malik
     pm_kappa: float = 0.05
     # tensore di struttura
