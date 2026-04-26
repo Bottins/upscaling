@@ -65,8 +65,8 @@ class TrainConfig:
     init_from_bicubic: bool = True
     log_every: int = 50
     snapshot_every: int = 25     # salva confronto visivo ogni N epoche
-    ckpt_dir: str = "./checkpoints"
-    snap_dir: str = "./checkpoints/snapshots"
+    ckpt_dir: str = "./checkPoints"
+    snap_dir: str = "./checkPoints/snapshots"
     grad_clip: float = 1.0        # norma massima del gradiente (stabilita')
 
 

@@ -208,13 +208,13 @@ python main.py --loss data_lr pde_anisotropic pde_shock --epochs 1500 --scale 2
 
 ### Output
 
-Nella directory `./checkpoints/`:
+Nella directory `./checkPoints/`:
 
 - `model.pt` — pesi della rete a fine training
 - `pred_hr.png` — predizione finale
 - `input_lr.png`, `gt_hr.png` — riferimenti
 
-In `./checkpoints/snapshots/`:
+In `./checkPoints/snapshots/`:
 
 - `compare_epXXXXX.png` — triptych `[HR | LR (nearest) | pred]` ogni
   `snapshot_every` epoche, con PSNR corrente in titolo.
