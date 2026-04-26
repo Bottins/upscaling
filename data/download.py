@@ -22,6 +22,13 @@ DATASETS = {
         ],
         "subdir": "DIV2K_valid_HR",
     },
+    "DIV2K_train_HR": {
+        "urls": [
+            "http://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_train_HR.zip",
+            "https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_train_HR.zip",
+        ],
+        "subdir": "DIV2K_train_HR",
+    },
 }
 
 # Singole immagini di test se nessun dataset e' scaricabile.

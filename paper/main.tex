@@ -1,0 +1,374 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage{bm}
+\usepackage{url}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+% ------------------------------------------------------------------
+% Comandi di convenienza
+% ------------------------------------------------------------------
+\newcommand{\grad}{\nabla}
+\newcommand{\divg}{\mathrm{div}}
+\newcommand{\Real}{\mathbb{R}}
+\newcommand{\loss}{\mathcal{L}}
+\newcommand{\net}{u_{\theta}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\begin{document}
+
+\title{Super Resolution PINN: A Physics-Informed Approach with
+Anisotropic Diffusion Priors for Single-Image Super-Resolution%
+\thanks{Identify applicable funding agency here. If none, delete this.}
+}
+
+\author{%
+\IEEEauthorblockN{1\textsuperscript{st} Alessandro Bottino}
+\IEEEauthorblockA{\textit{University of Naples Federico II} \\
+\textit{ISPP-CNR, Portici}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Antonio Marino}
+\IEEEauthorblockA{\textit{University of Naples Federico II} \\
+\textit{ISPP-CNR, Portici}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Antonio Vocino}
+\IEEEauthorblockA{\textit{University of Naples Federico II}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{4\textsuperscript{th} Andrea Solai}
+\IEEEauthorblockA{\textit{University of Naples Federico II}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{5\textsuperscript{th} Roberto Tessitore}
+\IEEEauthorblockA{\textit{University of Naples Federico II}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{6\textsuperscript{th} Salvatore Cuomo}
+\IEEEauthorblockA{\textit{University of Naples Federico II}\\
+Naples, Italy \\
+email / ORCID}
+\and
+\IEEEauthorblockN{7\textsuperscript{th} Vincenzo Vocca}
+\IEEEauthorblockA{\textit{University of Naples Federico II}\\
+Naples, Italy \\
+email / ORCID}
+}
+
+\maketitle
+
+% ==================================================================
+\begin{abstract}
+% Cosa mettere (150-200 parole, senza math e senza simboli speciali):
+% - contesto: single-image super-resolution come problema inverso
+%   mal-posto;
+% - gap: metodi deep SOTA richiedono dataset HR-LR; i prior classici
+%   su griglia sono limitati da risoluzione fissa;
+% - proposta: PINN che rappresenta l'immagine HR come rete neurale
+%   continua e impone come soft-constraint PDE di diffusione
+%   anisotropa, Perona Malik, shock filter e Total Variation,
+%   selezionabili modularmente;
+% - risultato: guadagno quantitativo rispetto alla bicubica su Set5 e
+%   DIV2K e bordi visivamente piu' netti, senza alcun training su
+%   dataset esterni;
+% - conclusione: la PINN fornisce un regolarizzatore adattivo e
+%   interpretabile per la super resolution, con applicazioni in ambiti
+%   in cui l'operatore di degradazione e' noto (imaging scientifico).
+Write the abstract here. Do not use math or special characters.
+\end{abstract}
+
+\begin{IEEEkeywords}
+physics-informed neural networks, super-resolution, anisotropic
+diffusion, inverse problems, implicit neural representations,
+total variation
+\end{IEEEkeywords}
+
+% ==================================================================
+\section{Introduction}
+% Cosa mettere:
+% 1. Super-resolution come problema inverso mal-posto: $y = P u + \eta$
+%    con $P = S B$. Infinite HR producono la stessa LR.
+% 2. Stato dell'arte data-driven (SRCNN, EDSR, SwinIR, SR3/diffusion):
+%    alta qualita' ma richiedono grandi dataset e non garantiscono
+%    aderenza all'operatore fisico.
+% 3. Approcci PDE classici (Perona-Malik, Weickert, ROF, shock filter):
+%    interpretabili ed edge-preserving, ma discreti su griglia.
+% 4. Proposta: PINN come ponte. Parametrizziamo $u$ come rete neurale
+%    continua e imponiamo le PDE come soft-constraint via autograd.
+% 5. Contributi (bullet list):
+%    \begin{itemize}
+%      \item formulazione zero-shot single-image come problema inverso
+%            regolarizzato;
+%      \item libreria modulare di regolarizzatori PDE (Perona-Malik,
+%            tensore di struttura vettoriale, shock filter, TV);
+%      \item protocollo di training stabile (curriculum, bicubic init,
+%            normalizzazione del residuo, gradient clipping);
+%      \item ablation study dei singoli prior.
+%    \end{itemize}
+% 6. Organizzazione dell'articolo.
+
+
+% ==================================================================
+\section{Related Work}
+
+\subsection{Deep Learning for Super-Resolution}
+% SRCNN \cite{dong2014srcnn}, EDSR \cite{lim2017edsr}, RCAN, ESRGAN,
+% SwinIR \cite{liang2021swinir}, diffusion-based SR3
+% \cite{saharia2022sr3}. Limiti: training set, bias del dataset,
+% scarsa interpretabilita'.
+
+\subsection{PDE-based Image Restoration}
+% Perona-Malik \cite{peronamalik1990}, Weickert anisotropic diffusion
+% \cite{weickert1998}, Rudin-Osher-Fatemi TV \cite{rof1992},
+% Osher-Rudin shock filter \cite{osherrudin1990}. Discretizzazione
+% su griglia; risoluzione fissa.
+
+\subsection{Physics-Informed Neural Networks}
+% Raissi, Perdikaris, Karniadakis \cite{raissi2019pinn}. Estensioni
+% all'imaging: PINN per advection-diffusion SR, inverse problems,
+% denoising. Implicit neural representations: SIREN
+% \cite{sitzmann2020siren}, Fourier features \cite{tancik2020fourier}.
+
+
+% ==================================================================
+\section{Problem Formulation}
+
+\subsection{Forward Degradation Model}
+% Formalizza l'operatore $P = S B$:
+% \begin{equation}
+%   y = P u + \eta, \qquad P = S \cdot B, \label{eq:forward}
+% \end{equation}
+% con $B$ convoluzione gaussiana di deviazione nota $\sigma$, $S$
+% sottocampionamento stride $s$, $\eta$ rumore additivo gaussiano.
+% Verifichiamo numericamente la coerenza di $P$ e del suo aggiunto
+% $P^*$ tramite dot-product test $\langle Pu, v\rangle = \langle u, P^*v\rangle$.
+
+\subsection{Inverse Problem as Energy Minimization}
+% Ricostruzione come minimizzazione regolarizzata:
+% \begin{equation}
+%   u^* = \argmin_u \| P u - y \|^2 + \lambda R(u), \label{eq:energy}
+% \end{equation}
+% dove $R(u)$ e' un prior. Prior edge-preserving basati su PDE anisotrope
+% preservano i bordi; Total Variation induce soluzioni piecewise-constant;
+% shock filter crea discontinuita' nette.
+
+
+% ==================================================================
+\section{Proposed Method}
+
+\subsection{Neural Parametrization of the HR Image}
+% Rappresentiamo $u$ come rete neurale
+% $\net: \Omega = [0,1]^2 \to \Real^3$ con $\Omega$ dominio HR continuo.
+% SIREN: $\sin(\omega_0 W x)$, $\omega_0 = 30$, 5 layer, 256 unita',
+% output rimappato in $[0,1]$. In alternativa Fourier-feature MLP.
+
+\subsection{Data-Fidelity Terms}
+% Due varianti selezionabili:
+% \begin{equation}
+%   \loss_{\text{LR}}(\theta) = \| P \net - y \|^2 \label{eq:datalr}
+% \end{equation}
+% (sulla griglia HR completa) e
+% \begin{equation}
+%   \loss_{\text{pts}}(\theta) = \tfrac{1}{K}\!\!\sum_{k=1}^{K}\!\!\| \net(x_k) - y_k \|^2 \label{eq:datapts}
+% \end{equation}
+% sui pixel LR riposizionati ai centri di cella $x_k=((i+0.5)/w, (j+0.5)/h)$.
+
+\subsection{PDE Regularizers}
+
+\subsubsection{Perona-Malik}
+% \begin{equation}
+%   N_{\text{PM}}[u] = \divg\!\big( g(|\grad u|^2)\, \grad u \big), \quad
+%   g(s) = \tfrac{1}{1 + s/\kappa^2}.
+% \end{equation}
+
+\subsubsection{Vectorial Anisotropic Diffusion}
+% Tensore di struttura vettoriale $G(u) = \sum_c \grad u_c \grad u_c^\top$,
+% decomposizione $G = Q \mathrm{diag}(\lambda_1,\lambda_2) Q^\top$,
+% tensore di diffusione $D(u) = Q \mathrm{diag}(g_1,g_2) Q^\top$ con
+% $g_i = 1/(1+\lambda_i)$ clippato in $[\epsilon, 1]$. Residuo
+% \begin{equation}
+%   N_{\text{aniso}}[u]_c = \divg\!\big(D(u) \grad u_c\big), \quad c \in \{R,G,B\}.
+% \end{equation}
+
+\subsubsection{Shock Filter}
+% $\eta = \grad u / |\grad u|$, seconda derivata direzionale
+% $u_{\eta\eta} = \eta^\top (\nabla^2 u) \eta$. Residuo
+% \begin{equation}
+%   N_{\text{shock}}[u] = \operatorname{sign}(u_{\eta\eta})\, |\grad u|,
+% \end{equation}
+% con $\operatorname{sign}$ sostituito da $\tanh(\cdot/\varepsilon)$.
+
+\subsubsection{Total Variation}
+% \begin{equation}
+%   \loss_{\text{TV}}(\theta) = \mathbb{E}_x\!\left[\sqrt{\textstyle\sum_c |\grad u_c(x)|^2 + \varepsilon}\right].
+% \end{equation}
+
+\subsection{Boundary Conditions}
+% Neumann: $\partial_n u = 0$ sui 4 bordi di $\Omega$.
+
+\subsection{Composite Loss and Curriculum}
+% \begin{equation}
+%   \loss = \lambda_{\text{d}} \loss_{\text{data}} + \alpha(t)\!\!\!\sum_i \lambda_i \loss_{\text{pde},i} + \lambda_{\text{bc}} \loss_{\text{bc}},
+% \end{equation}
+% $\alpha(t)$ lineare $0 \to 1$ su $[t_0, t_0{+}\Delta]$. Motivazione:
+% prima fit dati, poi il prior modella il sottospazio libero
+% (kernel di $P$).
+
+
+% ==================================================================
+\section{Implementation and Numerical Details}
+
+\subsection{Bicubic Pre-training}
+% La rete viene pre-addestrata a riprodurre la bicubica di $y$
+% (2000 step, Adam, cosine annealing). Evita minimi pessimi.
+
+\subsection{Residual Normalization}
+% Le coordinate sono in $[0,1]^2$ ma l'immagine e' $H \times W$ pixel.
+% Il residuo $\divg(D \grad u)$ in $[0,1]^2$ scala come $H^2$ rispetto
+% a coordinate pixel. Dividiamo per $H^2$ cosi' i pesi sono $O(1)$.
+
+\subsection{Structure-Tensor Regularization}
+% Prima di \texttt{eigh}($G$) aggiungiamo $\epsilon I$ per stabilita'
+% quando $|\grad u| \to 0$.
+
+\subsection{Training Loop}
+% Adam, $\mathrm{lr}=10^{-4}$, gradient clipping norma 1.0,
+% $N_{\text{coll}}=4096$, $N_{\text{pts}}=2048$, $T = 2000$ epoche.
+% Pseudocodice in Algorithm~\ref{alg:train}.
+
+\begin{algorithm}[t]
+\caption{PINN Super-Resolution Training}
+\label{alg:train}
+\begin{algorithmic}[1]
+\REQUIRE LR image $y$, operator params $(\sigma, s)$, epochs $T$, weights $\{\lambda_i\}$
+\STATE Initialize $\theta$; pre-train $\net$ on bicubic upsampling of $y$
+\FOR{$t = 1, \dots, T$}
+    \STATE Sample collocation points $\{x_k^{\text{coll}}\} \subset \Omega$
+    \STATE Sample data points $\{(x_k, y_k)\}$ from LR grid
+    \STATE Compute $\loss_{\text{data}}, \{\loss_{\text{pde},i}\}, \loss_{\text{bc}}$ via autograd
+    \STATE $\alpha \leftarrow \min(1, \max(0, (t - t_0)/\Delta))$
+    \STATE $\loss \leftarrow \lambda_{\text{d}} \loss_{\text{data}} + \alpha \sum_i \lambda_i \loss_{\text{pde},i} + \lambda_{\text{bc}} \loss_{\text{bc}}$
+    \STATE Update $\theta$ with Adam + grad-clip
+\ENDFOR
+\RETURN $\net$
+\end{algorithmic}
+\end{algorithm}
+
+
+% ==================================================================
+\section{Experiments}
+
+\subsection{Datasets and Protocol}
+% Set5 e DIV2K validation. HR -> applicazione di $P$ -> $y_{\text{LR}}$.
+% Scale $s \in \{2, 4\}$, $\sigma = 1.0$. Metriche: PSNR, SSIM, LPIPS.
+% Baseline: bicubic. Hardware: single GPU NVIDIA ... .
+
+\subsection{Main Results}
+\begin{table}[t]
+\caption{Quantitative comparison on Set5, $\times 4$ upscaling.}
+\label{tab:main}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Method & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$ \\
+\midrule
+Bicubic                              & -- & -- & -- \\
+PINN ($\loss_{\text{LR}}$ only)       & -- & -- & -- \\
++ Perona-Malik                        & -- & -- & -- \\
++ Anisotropic tensor                  & -- & -- & -- \\
++ Anisotropic + TV                    & -- & -- & -- \\
++ Anisotropic + Shock                 & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Ablation Study}
+% Effetto di ciascun termine singolo ($\Delta$ PSNR rispetto alla
+% bicubica). Effetto del curriculum (warmup 0 vs 300 epoche).
+% Sweep di $\lambda_{\text{aniso}}$ in $\{0, 10^{-3}, 10^{-2}, 10^{-1}, 1\}$.
+
+\subsection{Qualitative Analysis}
+% Fig.~\ref{fig:triptych}: triptych HR | LR (nearest) | pred su
+% almeno 3 immagini di Set5 (butterfly, baby, head).
+% Zoom su bordi per evidenziare color fringing su TV vs anisotropico.
+% Visualizzazione del campo $D(u)$: autovalori e orientazione principale.
+
+\begin{figure}[t]
+\centerline{\includegraphics[width=\columnwidth]{figs/triptych_butterfly.png}}
+\caption{Qualitative results on Set5-Butterfly, $\times 4$ upscaling.
+Left to right: HR ground truth, LR input (nearest-neighbor
+upsampling), PINN prediction with anisotropic diffusion prior.}
+\label{fig:triptych}
+\end{figure}
+
+\subsection{Stability and Convergence}
+% Curve di loss (data, PDE, BC) in funzione delle epoche.
+% Effetto del gradient clipping e della normalizzazione del residuo
+% sulla stabilita' del training.
+
+
+% ==================================================================
+\section{Discussion}
+% - Perche' funziona: la PDE impone un prior \emph{adattivo}: $D(u)$
+%   dipende da $u$ stessa (via tensore di struttura). Nelle zone piatte
+%   $D \approx I$, sui bordi $D$ ha un autovalore piccolo in direzione
+%   normale $\Rightarrow$ diffusione solo lungo l'isofota. Accoppia i
+%   canali RGB (evita color fringing).
+% - Perche' non batte EDSR/SwinIR: single-image zero-shot, nessuna
+%   informazione esterna; limite teorico imposto dal kernel di $P$.
+% - Failure cases: texture fini (tessuti, capelli), dove il prior
+%   locale non e' sufficiente.
+% - Valore: interpretabilita', nessun dataset HR-LR richiesto,
+%   applicabilita' diretta quando l'operatore $P$ e' noto
+%   (microscopia, medical imaging).
+
+
+% ==================================================================
+\section{Conclusion}
+% Riassunto dei contributi. Linee future:
+% - video SR (PDE spazio-temporale);
+% - accoppiamento con prior appresi (hybrid physics + data);
+% - blind SR (operatore $P$ stimato congiuntamente);
+% - meta-learning per generalizzazione multi-immagine.
+
+
+% ==================================================================
+\section*{Acknowledgment}
+% R.B.G. thanks... Fondi, cluster, collaborazioni.
+
+
+% ==================================================================
+\begin{thebibliography}{00}
+\bibitem{raissi2019pinn} M. Raissi, P. Perdikaris, and G. E. Karniadakis, ``Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations,'' \textit{J. Comput. Phys.}, vol. 378, pp. 686--707, 2019.
+\bibitem{sitzmann2020siren} V. Sitzmann, J. N. P. Martel, A. W. Bergman, D. B. Lindell, and G. Wetzstein, ``Implicit neural representations with periodic activation functions,'' in \textit{NeurIPS}, 2020.
+\bibitem{tancik2020fourier} M. Tancik et al., ``Fourier features let networks learn high frequency functions in low dimensional domains,'' in \textit{NeurIPS}, 2020.
+\bibitem{peronamalik1990} P. Perona and J. Malik, ``Scale-space and edge detection using anisotropic diffusion,'' \textit{IEEE Trans. Pattern Anal. Mach. Intell.}, vol. 12, no. 7, pp. 629--639, 1990.
+\bibitem{weickert1998} J. Weickert, \textit{Anisotropic Diffusion in Image Processing}. Stuttgart: Teubner, 1998.
+\bibitem{rof1992} L. I. Rudin, S. Osher, and E. Fatemi, ``Nonlinear total variation based noise removal algorithms,'' \textit{Physica D}, vol. 60, pp. 259--268, 1992.
+\bibitem{osherrudin1990} S. Osher and L. I. Rudin, ``Feature-oriented image enhancement using shock filters,'' \textit{SIAM J. Numer. Anal.}, vol. 27, no. 4, pp. 919--940, 1990.
+\bibitem{dong2014srcnn} C. Dong, C. C. Loy, K. He, and X. Tang, ``Image super-resolution using deep convolutional networks,'' \textit{IEEE Trans. Pattern Anal. Mach. Intell.}, vol. 38, no. 2, pp. 295--307, 2015.
+\bibitem{lim2017edsr} B. Lim, S. Son, H. Kim, S. Nah, and K. M. Lee, ``Enhanced deep residual networks for single image super-resolution,'' in \textit{CVPR Workshops}, 2017.
+\bibitem{liang2021swinir} J. Liang et al., ``SwinIR: Image restoration using Swin Transformer,'' in \textit{ICCV Workshops}, 2021.
+\bibitem{saharia2022sr3} C. Saharia, J. Ho, W. Chan, T. Salimans, D. J. Fleet, and M. Norouzi, ``Image super-resolution via iterative refinement,'' \textit{IEEE Trans. Pattern Anal. Mach. Intell.}, 2022.
+\bibitem{bevilacqua2012set5} M. Bevilacqua, A. Roumy, C. Guillemot, and M.-L. Alberi-Morel, ``Low-complexity single-image super-resolution based on nonnegative neighbor embedding,'' in \textit{BMVC}, 2012.
+\bibitem{agustsson2017div2k} E. Agustsson and R. Timofte, ``NTIRE 2017 challenge on single image super-resolution: Dataset and study,'' in \textit{CVPR Workshops}, 2017.
+\end{thebibliography}
+
+\end{document}

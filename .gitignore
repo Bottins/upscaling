@@ -11,6 +11,8 @@ env/
 
 checkpoints/
 datasets/
+benchmark_results/
+claude.txt
 
 .vscode/
 Library/

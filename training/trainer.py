@@ -17,6 +17,8 @@ from data.single_image import (
     sample_data_points,
 )
 from utils.metrics import psnr, save_image, save_triptych
+from utils.device import setup_device
+from learned_prior.load import load_prior, predict_hr
 
 
 class PINNTrainer:
@@ -25,8 +27,7 @@ class PINNTrainer:
         hr: (3, H, W) ground truth HR usato per generare la LR e per valutare.
         """
         self.cfg = cfg
-        self.device = torch.device(cfg.train.device if torch.cuda.is_available()
-                                   else "cpu")
+        self.device = setup_device(cfg.train.device)
         self.hr = hr.to(self.device)
         self.H, self.W = hr.shape[-2:]
 
@@ -46,6 +47,14 @@ class PINNTrainer:
 
         # Loss selezionate dal config (pulito e modulare)
         self.loss_fns = build_losses(cfg.loss.terms)
+
+        # Pre-calcola la predizione del prior appreso se richiesto
+        self.hr_prior_target = None
+        if "prior_sr" in cfg.loss.terms:
+            prior_net, _ = load_prior(cfg.loss.prior_ckpt, self.device)
+            self.hr_prior_target = predict_hr(prior_net, self.lr).detach()
+            p_prior = psnr(self.hr_prior_target, self.hr)
+            print(f"[prior] CNN prior PSNR vs HR: {p_prior:.2f}dB")
 
     # ---------------------------------------------------------------- utils
     def _bicubic_init(self, steps: int = 2000) -> None:
@@ -101,6 +110,7 @@ class PINNTrainer:
             eig_clip=cfg.loss.eig_clip,
             struct_eps=cfg.loss.struct_eps,
             coord_scale=float(max(self.H, self.W)),
+            hr_target=self.hr_prior_target,
             n_bc=512, device=self.device,
         )
 
