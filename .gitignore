@@ -12,5 +12,10 @@ env/
 checkpoints/
 datasets/
 
+.vscode/
+Library/
+info/
+micromamba.tar.bz2
+
 Thumbs.db
 .DS_Store
