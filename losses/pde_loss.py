@@ -9,7 +9,7 @@ from __future__ import annotations
 import torch
 
 from .registry import register
-from pde.diffusion import perona_malik_residual, anisotropic_tensor_residual
+from pde.diffusion import perona_malik_residual, anisotropic_tensor_residual, ZG_residual
 
 
 @register("pde_perona_malik")
