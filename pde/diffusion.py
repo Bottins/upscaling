@@ -79,7 +79,7 @@ def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05) -> torch.Tensor:
     g = 1.0 / (1.0 + g_mod / (kappa ** 2))                 # g( |grad u| )
     flux = g * grad_u                                      # (N,3,2)
     d_flux = divergence(flux, coords)                      # (N,3)
-    d_grad_u = divergence(grad_u, coord)                   # (N,3)
+    d_grad_u = divergence(grad_u, coords)                   # (N,3)
     _, gd_grad_u = channel_gradients(net,coords)           # (N,3,2)
     bih_u = divergence(gd_grad_u,coords)                   # (N,3)
     return d_flux - bih_u                                  # (N,3)
