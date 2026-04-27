@@ -30,3 +30,12 @@ def aniso_loss(net, collocation: torch.Tensor, eig_clip=(1e-3, 1.0),
                                       struct_eps=struct_eps)
     res = res / (coord_scale ** 2)
     return (res ** 2).mean()
+
+
+@register("pde_ZG")
+def ZG_loss(net, collocation: torch.Tensor, pm_kappa: float = 0.05,
+            coord_scale: float = 1.0, **_) -> torch.Tensor:
+    coords = collocation.clone().requires_grad_(True)
+    res = ZG_residual(net, coords, kappa=pm_kappa)
+    res = res / (coord_scale ** 2)
+    return (res ** 2).mean()
