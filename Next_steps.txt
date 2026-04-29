@@ -1,0 +1,17 @@
+Cose da fare per Benchmark finale
+
+1) Selezionare i casi da provare (fare ultime prove con varie combinazioni di cose)
+----- Siren + Loss_dati + TV
+-----  + provare le varie pde (perona-malik | anisotropic | ZG (dopo prove) )
+
+----- Siren + Loss_dati + shock
+-----  + provare le varie pde (perona-malik | anisotropic | ZG (dopo prove) )
+
+2) Aggiungere i plot del training dei termini di Loss 
+----- Uno script che faccia un freeze sulle metriche a step di X epoche e faccia anche il plot
+
+3) Fissato il benchmark dello step 1, provare con x2 e x4
+
+[Immagini: Bambino e Farfalla]
+
+4) Fare max 2 prove con immagini prese dal dataset di Darmstadt
