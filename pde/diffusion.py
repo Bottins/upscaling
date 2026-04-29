@@ -5,7 +5,7 @@ import torch
 from .operators import channel_gradients, divergence
 
 
-def perona_malik_residual(net, coords: torch.Tensor, kappa: float = 0.05) -> torch.Tensor:
+def perona_malik_residual(net, coords: torch.Tensor, kappa: float = 0.05,) -> torch.Tensor:
     """
     div( g(|grad u|^2) * grad u ) = 0, con g(s) = 1 / (1 + s / kappa^2).
     Canali indipendenti (baseline).
@@ -67,7 +67,7 @@ def anisotropic_tensor_residual(net, coords: torch.Tensor, eig_clip=(1e-3, 1.0),
     return divergence(flux, coords)                    # (N, 3)
 
 
-def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05) -> torch.Tensor:
+def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05, F: float = 0.5, B: float = 0.1) -> torch.Tensor:
     """
     div( g(|grad u|) * grad u ) - bih( u ) = 0, con g(s) = 1 / (1 + s / kappa^2) -- g(s) di Perona-Malik
     Canali indipendenti (baseline).
@@ -78,8 +78,8 @@ def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05) -> torch.Tensor:
     g_mod = torch.linalg.norm(grad_u)                     # |grad u|
     g = 1.0 / (1.0 + g_mod / (kappa ** 2))                 # g( |grad u| )
     flux = g * grad_u                                      # (N,3,2)
-    d_flux = divergence(flux, coords)                      # (N,3)
+    d_flux = F * divergence(flux, coords)                      # (N,3)
     d_grad_u = divergence(grad_u, coords)                   # (N,3)
     _, gd_grad_u = channel_gradients(net,coords)           # (N,3,2)
-    bih_u = divergence(gd_grad_u,coords)                   # (N,3)
+    bih_u = B * divergence(gd_grad_u,coords)                   # (N,3)
     return d_flux - bih_u                                  # (N,3)
