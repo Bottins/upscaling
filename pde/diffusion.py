@@ -67,7 +67,7 @@ def anisotropic_tensor_residual(net, coords: torch.Tensor, eig_clip=(1e-3, 1.0),
     return divergence(flux, coords)                    # (N, 3)
 
 
-def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05, F: float = 0.1, B: float = 0.8) -> torch.Tensor:
+def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05, F: float = 0.5, B: float = 0.1) -> torch.Tensor:
     """
     div( g(|grad u|) * grad u ) - bih( u ) = 0, con g(s) = 1 / (1 + s / kappa^2) -- g(s) di Perona-Malik
     Canali indipendenti (baseline).
@@ -76,7 +76,7 @@ def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05, F: float = 0.1, 
     """
     u, grad_u = channel_gradients(net, coords)            # (N,3), (N,3,2)
     g_mod = torch.linalg.norm(grad_u)                     # |grad u|
-    g = 1.0 / (1.0 + g_mod / (kappa ** 2))                 # g( |grad u| )
+    g = 1.0 / sqrt((1.0 + g_mod / (kappa ** 2)))                 # g( |grad u| )
     flux = g * grad_u                                      # (N,3,2)
     d_flux = F * divergence(flux, coords)                      # (N,3)
     d_grad_u = divergence(grad_u, coords)                   # (N,3)
