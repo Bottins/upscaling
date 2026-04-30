@@ -1,6 +1,7 @@
 """Residui PDE di diffusione che accoppiano i canali RGB."""
 from __future__ import annotations
 import torch
+import math
 
 from .operators import channel_gradients, divergence
 
