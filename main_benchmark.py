@@ -36,28 +36,22 @@ def default_configs():
         # -------- PINN: termine dati da solo ----------------------------
         {"name": "PINN: data_lr", "method": "pinn",
          "terms": ["data_lr"]},
-        # -------- PINN + PDE del 2 ordine -------------------------------
-        {"name": "PINN + Perona-Malik", "method": "pinn",
-         "terms": ["data_lr", "pde_perona_malik", "bc_neumann"]},
-        {"name": "PINN + anisotropic tensor", "method": "pinn",
-         "terms": ["data_lr", "pde_anisotropic", "bc_neumann"]},
-        # -------- PINN + regolarizzatori di nitidezza -------------------
+        # -------- PINN + TV --------------------------------
         {"name": "PINN + TV",    "method": "pinn",
          "terms": ["data_lr", "reg_tv"]},
-        {"name": "PINN + shock", "method": "pinn",
+        #--------- PINN + TV + PDE
+        {"name": "PINN + TV + Perona-Malik",    "method": "pinn",
+         "terms": ["data_lr", "reg_tv", "pde_perona_malik"]},
+        {"name": "PINN + TV + anisotropic tensor",    "method": "pinn",
+         "terms": ["data_lr", "reg_tv", "pde_anisotropic"]},
+        # -------- PINN + shock --------------------------------
+        {"name": "PINN + shock",    "method": "pinn",
          "terms": ["data_lr", "pde_shock"]},
-        # -------- PINN + 4° ordine (anti-staircase) ---------------------
-        {"name": "PINN + Hessian (LLT)", "method": "pinn",
-         "terms": ["data_lr", "reg_hessian"]},
-        {"name": "PINN + aniso4 (You-Kaveh)", "method": "pinn",
-         "terms": ["data_lr", "pde_aniso4"]},
-        # -------- combinazioni ------------------------------------------
-        {"name": "PINN + aniso + LLT",    "method": "pinn",
-         "terms": ["data_lr", "pde_anisotropic", "reg_hessian"]},
-        {"name": "PINN + PM + shock",     "method": "pinn",
-         "terms": ["data_lr", "pde_perona_malik", "pde_shock"]},
-        {"name": "PINN + aniso + shock + LLT", "method": "pinn",
-         "terms": ["data_lr", "pde_anisotropic", "pde_shock", "reg_hessian"]},
+        #--------- PINN + shock + PDE
+        {"name": "PINN + shock + Perona-Malik",    "method": "pinn",
+         "terms": ["data_lr", "pde_schock", "pde_perona_malik"]},
+        {"name": "PINN + shock + anisotropic tensor",    "method": "pinn",
+         "terms": ["data_lr", "pde_shock", "pde_anisotropic"]},
     ]
 
 
