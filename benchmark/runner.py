@@ -70,7 +70,7 @@ _HEAVY_TERMS = {"pde_aniso4", "reg_hessian"}   # 4 ordine: molta memoria
 
 def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
                 terms: List[str], init_state: dict,
-                max_epochs: int, patience: int, device) -> torch.Tensor:
+                max_epochs: int, patience: int, device) -> Tuple[torch.Tensor, dict]:
     """Addestra una PINN con i termini dati, partendo da init_state. Early stop
     sul PSNR vs HR (patience epoche senza miglioramento)."""
     H, W = hr.shape[-2:]
@@ -102,6 +102,10 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
     stale = 0
     w = cfg.loss.weights
 
+    history = {"total": [], "psnr": []}
+    for name in terms:
+        history[name] = []
+
     def _pde_scale(ep):
         k0 = cfg.loss.pde_warmup_epochs
         kr = max(1, cfg.loss.pde_ramp_epochs)
@@ -122,12 +126,16 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
         )
         pde_s = _pde_scale(ep)
         total = torch.zeros((), device=device)
+
+        current_losses = {}
+
         for name, fn in loss_fns.items():
             val = fn(net, **kwargs)
             wt = w.get(name, 1.0)
             if name.startswith("pde_"):
                 wt = wt * pde_s
             total = total + wt * val
+            current_losses[name] = val.item()
 
         opt.zero_grad(set_to_none=True)
         total.backward()
@@ -137,6 +145,12 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
 
         # eval per early stopping (ogni epoca, e' veloce su immagine singola)
         p = psnr(_render(), hr)
+
+        history["total"].append(total.item())
+        history["psnr"].append(p)
+        for name in terms:
+            history[name].append(current_losses[name])
+
         if p > best_psnr + 1e-4:
             best_psnr = p
             best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
@@ -155,7 +169,7 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
 
     net.load_state_dict({k: v.to(device) for k, v in best_state.items()})
     print(f"  [pinn] elapsed {time.time() - t0:.1f}s  best PSNR={best_psnr:.2f}dB")
-    return _render().detach()
+    return _render().detach(), history
 
 
 # -------------------------------------------------------------------- entry
@@ -214,7 +228,8 @@ def run_benchmark(hr: torch.Tensor, cfg: Config, configs: List[dict],
         trial_ckpt = cache_path / f"{slug}.pt" if cache_path else None
         if trial_ckpt and trial_ckpt.exists() and not force:
             data = torch.load(trial_ckpt, map_location="cpu")
-            results[name] = (data["pred"], data["metrics"])
+            history_data = data.get("history", None)
+            results[name] = (data["pred"], data["metrics"], history_data)
             print(f"[skip] {name}: risultato in cache "
                   f"(PSNR={data['metrics']['psnr']:.2f}dB  "
                   f"SSIM={data['metrics']['ssim']:.4f})")
@@ -241,7 +256,7 @@ def run_benchmark(hr: torch.Tensor, cfg: Config, configs: List[dict],
             else:
                 raise ValueError(f"Unknown classical kind: {kind}")
         elif method == "pinn":
-            pred = _train_pinn(cfg, hr, lr, spec["terms"], init_state,
+            pred, history = _train_pinn(cfg, hr, lr, spec["terms"], init_state,
                                max_epochs=max_epochs, patience=patience,
                                device=device)
         else:
@@ -250,13 +265,20 @@ def run_benchmark(hr: torch.Tensor, cfg: Config, configs: List[dict],
         pred = pred.to(device).clamp(0, 1)
         metrics = compute_all(pred, hr)
         pred_cpu = pred.cpu()
-        results[name] = (pred_cpu, metrics)
+        if method == "pinn":
+            results[name] = (pred_cpu, metrics, history)
+        else:
+            results[name] = (pred_cpu, metrics, None)
+
         print(f"  -> PSNR={metrics['psnr']:.2f}dB  SSIM={metrics['ssim']:.4f}")
 
         # ---- persisti subito: riprendi-da-dove-interrotto + snapshot PNG
         if trial_ckpt is not None:
-            torch.save({"pred": pred_cpu, "metrics": metrics,
-                        "spec": spec}, trial_ckpt)
+            save_data = {"pred": pred_cpu, "metrics": metrics,
+                        "spec": spec}
+            if method == "pinn":
+                save_data["history"] = history
+            torch.save(save_data, trial_ckpt)
             save_image(pred_cpu,
                        str(trials_path / f"{slug}__"
                            f"psnr{metrics['psnr']:.2f}_"
