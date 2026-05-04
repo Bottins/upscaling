@@ -77,7 +77,7 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
     net = build_model(cfg.model).to(device)
     net.load_state_dict({k: v.to(device) for k, v in init_state.items()})
     opt = torch.optim.Adam(net.parameters(), lr=cfg.train.lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(opt, step_size=100, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max_epochs, eta_min=1e-6)
     loss_fns = build_losses(list(terms))
     data_coords, data_rgb = lr_pixels_as_data_points(lr)
 
@@ -167,7 +167,7 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
             print(f"  [early-stop] ep {ep}, no improvement for {patience} epochs  "
                   f"(best PSNR={best_psnr:.2f}dB)")
             break
-        
+
         scheduler.step()
 
     net.load_state_dict({k: v.to(device) for k, v in best_state.items()})
