@@ -33,8 +33,8 @@ class LossConfig:
         "data_points":      1.0,
         # priori gentili: devono modellare il sottospazio libero (kernel di P),
         # non sovrastare il fit dati.
-        "pde_perona_malik": 2e-2,
-        "pde_anisotropic":  2e-2,
+        "pde_perona_malik": 0.005,   
+        "pde_anisotropic":  1.0,
         "bc_neumann":       1e-3,
         "reg_tv":           2e-3,
         "pde_shock":        5e-3,
@@ -48,11 +48,13 @@ class LossConfig:
     pm_kappa: float = 0.05
     # tensore di struttura
     struct_sigma: float = 1.0
-    eig_clip: Tuple[float, float] = (1e-3, 1.0)
+    eig_clip: Tuple[float, float] = (1e-5, 1.0)
     struct_eps: float = 1e-4      # regolarizzazione di G prima di eigh
     # curriculum: il peso PDE sale linearmente da 0 a 1 fra [warmup, warmup+ramp]
-    pde_warmup_epochs: int = 50
-    pde_ramp_epochs:   int = 200
+    pde_warmup_epochs: int = 0
+    pde_ramp_epochs:   int = 0
+
+    aniso_kappa: float = 0.05
 
 
 @dataclass

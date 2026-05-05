@@ -27,9 +27,9 @@ def pm_loss(net, collocation: torch.Tensor, pm_kappa: float = 0.05,
 @register("pde_anisotropic")
 def aniso_loss(net, collocation: torch.Tensor, eig_clip=(1e-3, 1.0),
                struct_eps: float = 1e-4, coord_scale: float = 1.0,
-               **_) -> torch.Tensor:
+               aniso_kappa: float = 0.05, **_) -> torch.Tensor:
     coords = collocation.clone().requires_grad_(True)
     res = anisotropic_tensor_residual(net, coords, eig_clip=eig_clip,
-                                      struct_eps=struct_eps, coord_scale=coord_scale)
+                                      struct_eps=struct_eps, coord_scale=coord_scale, kappa=aniso_kappa)
     res = res / (coord_scale ** 2)
     return (res ** 2).mean()
