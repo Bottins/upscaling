@@ -135,8 +135,9 @@ def _train_pinn(cfg: Config, hr: torch.Tensor, lr: torch.Tensor,
             wt = w.get(name, 1.0)
             if name.startswith("pde_"):
                 wt = wt * pde_s
+            weighted_val = wt * val
             total = total + wt * val
-            current_losses[name] = val.item()
+            current_losses[name] = weighted_val.item()
 
         opt.zero_grad(set_to_none=True)
         total.backward()
