@@ -31,7 +31,7 @@ def _structure_tensor(grad_u: torch.Tensor) -> torch.Tensor:
 
 
 def _diffusion_tensor(G: torch.Tensor, eig_clip=(1e-3, 1.0),
-                      eps: float = 1e-4) -> torch.Tensor:
+                      eps: float = 1e-4, coord_scale: float = 1.0) -> torch.Tensor:
     """
     D = Q diag(g1, g2) Q^T, con g_i funzione decrescente degli autovalori di G.
     Aggiunge eps*I per stabilizzare la decomposizione quando G ~ 0.
@@ -41,8 +41,11 @@ def _diffusion_tensor(G: torch.Tensor, eig_clip=(1e-3, 1.0),
     eye = torch.eye(2, device=G.device, dtype=G.dtype).expand_as(G)
     G = G + eps * eye
     evals, evecs = torch.linalg.eigh(G)                # evals: (N, 2), evecs: (N, 2, 2)
+
+    evals_norm = evals / (coord_scale ** 2)
+
     # funzione di diffusione: piu' diffusione dove l'autovalore e' piccolo
-    g_vals = 1.0 / (1.0 + evals)
+    g_vals = 1.0 / (1.0 + evals_norm)
     lo, hi = eig_clip
     g_vals = g_vals.clamp(min=lo, max=hi)
     # D = Q diag(g) Q^T
@@ -51,7 +54,7 @@ def _diffusion_tensor(G: torch.Tensor, eig_clip=(1e-3, 1.0),
 
 
 def anisotropic_tensor_residual(net, coords: torch.Tensor, eig_clip=(1e-3, 1.0),
-                                struct_eps: float = 1e-4) -> torch.Tensor:
+                                struct_eps: float = 1e-4, coord_scale: float = 1.0) -> torch.Tensor:
     """
     div( D(u) * grad u_c ) = 0 per ogni canale c, con D tensore 2x2 condiviso.
     I canali sono accoppiati attraverso il tensore di struttura G(u).
@@ -61,7 +64,7 @@ def anisotropic_tensor_residual(net, coords: torch.Tensor, eig_clip=(1e-3, 1.0),
     """
     _, grad_u = channel_gradients(net, coords)         # (N, 3, 2)
     G = _structure_tensor(grad_u)                      # (N, 2, 2)
-    D = _diffusion_tensor(G, eig_clip, eps=struct_eps) # (N, 2, 2)
+    D = _diffusion_tensor(G, eig_clip, eps=struct_eps, coord_scale=coord_scale) # (N, 2, 2)
     # flux_c = D @ grad_u_c  -> (N, 3, 2)
     flux = torch.einsum("nij,ncj->nci", D, grad_u)
     return divergence(flux, coords)                    # (N, 3)

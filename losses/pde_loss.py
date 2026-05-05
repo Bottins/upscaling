@@ -16,7 +16,10 @@ from pde.diffusion import perona_malik_residual, anisotropic_tensor_residual
 def pm_loss(net, collocation: torch.Tensor, pm_kappa: float = 0.05,
             coord_scale: float = 1.0, **_) -> torch.Tensor:
     coords = collocation.clone().requires_grad_(True)
-    res = perona_malik_residual(net, coords, kappa=pm_kappa)
+
+    real_kappa =  pm_kappa * coord_scale
+
+    res = perona_malik_residual(net, coords, kappa=real_kappa)
     res = res / (coord_scale ** 2)
     return (res ** 2).mean()
 
@@ -27,6 +30,6 @@ def aniso_loss(net, collocation: torch.Tensor, eig_clip=(1e-3, 1.0),
                **_) -> torch.Tensor:
     coords = collocation.clone().requires_grad_(True)
     res = anisotropic_tensor_residual(net, coords, eig_clip=eig_clip,
-                                      struct_eps=struct_eps)
+                                      struct_eps=struct_eps, coord_scale=coord_scale)
     res = res / (coord_scale ** 2)
     return (res ** 2).mean()
