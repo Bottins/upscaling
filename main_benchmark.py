@@ -49,7 +49,7 @@ def default_configs():
          "terms": ["data_lr", "pde_shock"]},
         #--------- PINN + shock + PDE
         {"name": "PINN + shock + Perona-Malik",    "method": "pinn",
-         "terms": ["data_lr", "pde_schock", "pde_perona_malik"]},
+         "terms": ["data_lr", "pde_shock", "pde_perona_malik"]},
         {"name": "PINN + shock + anisotropic tensor",    "method": "pinn",
          "terms": ["data_lr", "pde_shock", "pde_anisotropic"]},
     ]
