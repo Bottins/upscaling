@@ -38,20 +38,20 @@ def default_configs():
          "terms": ["data_lr"]},
         # -------- PINN + TV --------------------------------
         {"name": "PINN + TV",    "method": "pinn",
-         "terms": ["data_lr", "reg_tv"]},
+         "terms": ["reg_tv"]},
         #--------- PINN + TV + PDE
         {"name": "PINN + TV + Perona-Malik",    "method": "pinn",
-         "terms": ["data_lr", "reg_tv", "pde_perona_malik"]},
+         "terms": ["reg_tv", "pde_perona_malik"]},
         {"name": "PINN + TV + anisotropic tensor",    "method": "pinn",
-         "terms": ["data_lr", "reg_tv", "pde_anisotropic"]},
+         "terms": ["reg_tv", "pde_anisotropic"]},
         # -------- PINN + shock --------------------------------
         {"name": "PINN + shock",    "method": "pinn",
-         "terms": ["data_lr", "pde_shock"]},
+         "terms": ["pde_shock"]},
         #--------- PINN + shock + PDE
         {"name": "PINN + shock + Perona-Malik",    "method": "pinn",
-         "terms": ["data_lr", "pde_shock", "pde_perona_malik"]},
+         "terms": ["pde_shock", "pde_perona_malik"]},
         {"name": "PINN + shock + anisotropic tensor",    "method": "pinn",
-         "terms": ["data_lr", "pde_shock", "pde_anisotropic"]},
+         "terms": ["pde_shock", "pde_anisotropic"]},
     ]
 
 
