@@ -20,8 +20,8 @@ from pathlib import Path
 from config import Config
 from data.download import ensure_dataset
 from data.dataset import list_images, load_image
-from benchmark.runner import run_benchmark, _slug
-from benchmark.visualize import save_grid, markdown_table, plot_loss_history
+from benchmark.runner import run_benchmark
+from benchmark.visualize import save_grid, markdown_table
 
 
 def default_configs():
@@ -38,20 +38,20 @@ def default_configs():
          "terms": ["data_lr"]},
         # -------- PINN + TV --------------------------------
         {"name": "PINN + TV",    "method": "pinn",
-         "terms": ["reg_tv"]},
+         "terms": ["data_lr", "reg_tv"]},
         #--------- PINN + TV + PDE
         {"name": "PINN + TV + Perona-Malik",    "method": "pinn",
-         "terms": ["reg_tv", "pde_perona_malik"]},
+         "terms": ["data_lr", "reg_tv", "pde_perona_malik"]},
         {"name": "PINN + TV + anisotropic tensor",    "method": "pinn",
-         "terms": ["reg_tv", "pde_anisotropic"]},
+         "terms": ["data_lr", "reg_tv", "pde_anisotropic"]},
         # -------- PINN + shock --------------------------------
         {"name": "PINN + shock",    "method": "pinn",
-         "terms": ["pde_shock"]},
+         "terms": ["data_lr", "pde_shock"]},
         #--------- PINN + shock + PDE
         {"name": "PINN + shock + Perona-Malik",    "method": "pinn",
-         "terms": ["pde_shock", "pde_perona_malik"]},
+         "terms": ["data_lr", "pde_schock", "pde_perona_malik"]},
         {"name": "PINN + shock + anisotropic tensor",    "method": "pinn",
-         "terms": ["pde_shock", "pde_anisotropic"]},
+         "terms": ["data_lr", "pde_shock", "pde_anisotropic"]},
     ]
 
 
@@ -116,15 +116,6 @@ def main():
                   n_cols=4, title=title)
         (out / "results.md").write_text(markdown_table(partial_results),
                                         encoding="utf-8")
-        
-        plots_dir = out / "loss_plots"
-        plots_dir.mkdir(exist_ok=True)
-        for name, data in partial_results.items():
-            if len(data) == 3 and data[2] is not None: # Controlla se c'è la history
-                history = data[2]
-                slug_name = _slug(name)
-                plot_path = str(plots_dir / f"{slug_name}_losses.png")
-                plot_loss_history(history, title=name, save_path=plot_path)
 
     results, lr = run_benchmark(hr, cfg, configs,
                                 max_epochs=args.max_epochs,
