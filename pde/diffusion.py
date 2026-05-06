@@ -1,6 +1,7 @@
 """Residui PDE di diffusione che accoppiano i canali RGB."""
 from __future__ import annotations
 import torch
+import math
 
 from .operators import channel_gradients, divergence
 
@@ -68,3 +69,21 @@ def anisotropic_tensor_residual(net, coords: torch.Tensor, eig_clip=(1e-3, 1.0),
     # flux_c = D @ grad_u_c  -> (N, 3, 2)
     flux = torch.einsum("nij,ncj->nci", D, grad_u)
     return divergence(flux, coords)                    # (N, 3)
+
+
+def ZG_residual(net, coords: torch.Tensor, kappa: float = 0.05, F: float = 0.8, B: float = 0.1) -> torch.Tensor:
+    """
+    div( g(|grad u|) * grad u ) - bih( u ) = 0, con g(s) = 1 / (1 + s / kappa^2) -- g(s) di Perona-Malik
+    Canali indipendenti (baseline).
+    coords: (N, 2) con requires_grad=True.
+    Ritorna: (N, 3) residuo per canale.
+    """
+    u, grad_u = channel_gradients(net, coords)            # (N,3), (N,3,2)
+    g_mod = torch.linalg.norm(grad_u)                     # |grad u|
+    g = 1.0 / math.sqrt(1.0 + (( g_mod / kappa ) ** 2))                 # g( |grad u| )
+    flux = g * grad_u                                      # (N,3,2)
+    d_flux = F * divergence(flux, coords)                      # (N,3)
+    d_grad_u = divergence(grad_u, coords)                   # (N,3)
+    _, gd_grad_u = channel_gradients(net,coords)           # (N,3,2)
+    bih_u = B * divergence(gd_grad_u,coords)                   # (N,3)
+    return d_flux - bih_u                                  # (N,3)
