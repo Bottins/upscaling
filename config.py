@@ -35,6 +35,7 @@ class LossConfig:
         # non sovrastare il fit dati.
         "pde_perona_malik": 0.005,   
         "pde_anisotropic":  1.0,
+        "pde_ZG":           2e-2,
         "bc_neumann":       1e-3,
         "reg_tv":           2e-3,
         "pde_shock":        5e-3,
