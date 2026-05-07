@@ -20,8 +20,8 @@ from pathlib import Path
 from config import Config
 from data.download import ensure_dataset
 from data.dataset import list_images, load_image
-from benchmark.runner import run_benchmark
-from benchmark.visualize import save_grid, markdown_table
+from benchmark.runner import run_benchmark, _slug
+from benchmark.visualize import save_grid, markdown_table, plot_loss_history
 
 
 def default_configs():
@@ -116,6 +116,15 @@ def main():
                   n_cols=4, title=title)
         (out / "results.md").write_text(markdown_table(partial_results),
                                         encoding="utf-8")
+        
+        plots_dir = out / "loss_plots"
+        plots_dir.mkdir(exist_ok=True)
+        for name, data in partial_results.items():
+            if len(data) == 3 and data[2] is not None:
+                history = data[2]
+                slug_name = _slug(name)
+                plot_path = str(plots_dir / f"{slug_name}_losses.png")
+                plot_loss_history(history, title=name, save_path=plot_path)
 
     results, lr = run_benchmark(hr, cfg, configs,
                                 max_epochs=args.max_epochs,
