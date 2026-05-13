@@ -16,7 +16,7 @@ def make_coord_grid(height: int, width: int, device: torch.device, dtype: torch.
 
 def sample_image_at_coords(image: torch.Tensor, coords: torch.Tensor) -> torch.Tensor:
     if image.dim() != 3:
-        raise ValueError("image deve essere (C,H,W)")
+        raise ValueError("image needs to be (C,H,W)")
     batch = image.unsqueeze(0)
     grid = coords.view(1, -1, 1, 2) * 2.0 - 1.0
     sampled = F.grid_sample(
@@ -62,7 +62,7 @@ class ResidualSIREN(nn.Module):
     ):
         super().__init__()
         if base_image.dim() != 3:
-            raise ValueError("base_image deve essere (C,H,W)")
+            raise ValueError("base_image needs to be (C,H,W)")
         self.register_buffer("base_image", base_image)
         self.residual_scale = residual_scale
 

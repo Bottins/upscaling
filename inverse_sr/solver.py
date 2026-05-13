@@ -251,7 +251,7 @@ def solve_inverse_problem(
         warmup = min(1.0, epoch / warm_epochs)
         for key, weight in trained_prior_weights.items():
             if key not in prior_terms:
-                raise ValueError(f"Prior non supportato: {key}")
+                raise ValueError(f"Prior not supported: {key}")
             prior_loss = prior_loss + warmup * weight * prior_terms[key]
 
         param_reg = cfg.lambda_noise_reg * (gaussian_std + laplace_scale + speckle_std)
@@ -274,7 +274,7 @@ def solve_inverse_problem(
             elif cfg.selection_metric == "objective":
                 selection_score = -objective_value
             else:
-                raise ValueError(f"selection_metric non supportata: {cfg.selection_metric}")
+                raise ValueError(f"selection_metric not supported: {cfg.selection_metric}")
 
         if selection_score > best_selection_score:
             best_selection_score = selection_score
@@ -332,7 +332,7 @@ def solve_inverse_problem(
             )
 
     if best_state is None:
-        raise RuntimeError("Ottimizzazione fallita: nessuno stato valido salvato.")
+        raise RuntimeError("Optimization failed: no valid state saved.")
 
     with torch.no_grad():
         model.load_state_dict(best_state["model"])

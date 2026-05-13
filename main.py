@@ -20,42 +20,42 @@ from inverse_sr.solver import InverseSolverConfig, solve_inverse_problem
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark per ricostruzione SR con operatore blur+downsample ignoto, "
-            "miscela di noise trainabile e prior PDE (Perona-Malik + shock)."
+            "Benchmark for SR reconstruction with unknown blur+downsample operator, "
+            "trainable noise mixture, and PDE priors (Perona-Malik + shock)."
         )
     )
     parser.add_argument("--image", type=str, default=None,
-                        help="Path immagine HR oppure nome file da cercare in datasets/.")
+                        help="HR image path or filename to search inside datasets/.")
     parser.add_argument("--dataset-root", type=str, default="datasets",
-                        help="Cartella in cui cercare immagini se --image non e' un path valido.")
+                        help="Directory where images are searched if --image is not a valid path.")
     parser.add_argument("--size", type=int, default=128,
-                        help="Resize quadrato dell'immagine HR prima del benchmark.")
+                        help="Square resize of the HR image before benchmarking.")
     parser.add_argument("--scale", type=int, default=2,
-                        help="Fattore di downsampling.")
+                        help="Downsampling factor.")
     parser.add_argument("--epochs", type=int, default=250,
-                        help="Epoche di ottimizzazione per metodo.")
+                        help="Optimization epochs per method.")
     parser.add_argument("--device", type=str, default="auto",
-                        help="'auto', 'cuda' o 'cpu'.")
+                        help="'auto', 'cuda' or 'cpu'.")
     parser.add_argument("--seed", type=int, default=0,
-                        help="Seed globale per degradazione sintetica e inizializzazione.")
+                        help="Global seed for synthetic degradation and initialization.")
     parser.add_argument("--sigma-true", type=float, default=1.35,
-                        help="Sigma reale del blur gaussiano usato per generare LR.")
+                        help="Ground-truth Gaussian blur sigma used to generate LR.")
     parser.add_argument("--gaussian-std", type=float, default=0.03,
-                        help="Std reale del rumore gaussiano nella miscela.")
+                        help="Ground-truth Gaussian noise std in the mixture.")
     parser.add_argument("--laplace-scale", type=float, default=0.02,
-                        help="Scala reale del rumore Laplace nella miscela.")
+                        help="Ground-truth Laplace noise scale in the mixture.")
     parser.add_argument("--speckle-std", type=float, default=0.05,
-                        help="Std reale del rumore speckle nella miscela.")
+                        help="Ground-truth speckle noise std in the mixture.")
     parser.add_argument("--noise-weights", type=float, nargs=3,
                         default=(0.45, 0.30, 0.25),
                         metavar=("W_GAUSS", "W_LAPLACE", "W_SPECKLE"),
-                        help="Pesi reali della miscela di noise per generare LR.")
+                        help="Ground-truth noise mixture weights used to generate LR.")
     parser.add_argument("--results-dir", type=str, default="results",
-                        help="Root cartella di output.")
+                        help="Output directory root.")
     parser.add_argument("--out", type=str, default=None,
-                        help="Cartella run specifica, stile old/main_benchmark.py.")
+                        help="Specific run directory, following old/main_benchmark.py style.")
     parser.add_argument("--only", nargs="+", default=None,
-                        help="Esegui solo i metodi il cui nome contiene una di queste stringhe.")
+                        help="Run only methods whose name contains one of these strings.")
     return parser.parse_args()
 
 
@@ -96,7 +96,7 @@ def observed_title(scale: int) -> str:
 
 def markdown_table(results: list[dict]) -> str:
     lines = [
-        "| Metodo | PSNR | SSIM | Sigma stimato | Pesi noise |",
+        "| Method | PSNR | SSIM | Estimated sigma | Noise weights |",
         "| --- | ---: | ---: | ---: | --- |",
     ]
     for item in results:
@@ -108,7 +108,7 @@ def markdown_table(results: list[dict]) -> str:
 
 
 def learned_prior_lines(methods_payload: dict) -> list[str]:
-    lines = ["## Pesi prior appresi", ""]
+    lines = ["## Learned Prior Weights", ""]
     found = False
     for method_id, payload in methods_payload.items():
         prior_weights = payload.get("prior_weights")
@@ -119,7 +119,7 @@ def learned_prior_lines(methods_payload: dict) -> list[str]:
         pretty = ", ".join(f"{key}={value:.4g}" for key, value in prior_weights.items())
         lines.append(f"- {display_name}: {pretty}")
     if not found:
-        lines.append("- Nessun prior trainabile in questo run.")
+        lines.append("- No trainable priors in this run.")
     return lines
 
 
@@ -200,7 +200,7 @@ def main() -> None:
                 configs.append(config)
         print(f"[benchmark] filtered to {len(configs)} methods (including Bicubic baseline)")
     if not configs:
-        raise RuntimeError("Nessun metodo selezionato.")
+        raise RuntimeError("No methods selected.")
 
     print(f"[data] image={image_path}")
     print(f"[device] {device}")
@@ -308,14 +308,14 @@ def main() -> None:
             )
 
         report_lines = [
-            "# Benchmark SR con operatore ignoto",
+            "# SR Benchmark with Unknown Operator",
             "",
-            f"- Immagine: `{image_path}`",
+            f"- Image: `{image_path}`",
             f"- Device: `{device}`",
-            f"- Scala: `{args.scale}`",
-            f"- Sigma reale blur: `{degradation.sigma:.4f}`",
+            f"- Scale: `{args.scale}`",
+            f"- Ground-truth blur sigma: `{degradation.sigma:.4f}`",
             (
-                "- Noise reale: "
+                "- Ground-truth noise: "
                 f"weights={tuple(round(x, 4) for x in degradation.noise.weights)}, "
                 f"gaussian_std={degradation.noise.gaussian_std:.4f}, "
                 f"laplace_scale={degradation.noise.laplace_scale:.4f}, "
