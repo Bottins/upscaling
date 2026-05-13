@@ -443,7 +443,7 @@ def main() -> None:
         scenario_results=scenario_results,
         args=args,
     )
-    print(f"\n[done] report salvato in {out_dir}")
+    print(f"\n[done] report saved in {out_dir}")
 
 
 if __name__ == "__main__":
