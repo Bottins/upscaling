@@ -1,331 +1,138 @@
-# PINN Super-Resolution
+# Inverse PINN per Super-Resolution con Operatore Ignoto
 
-Implementazione modulare di una PINN (Physics-Informed Neural Network) per
-Super-Resolution di una singola immagine. Il problema e' formulato come
-problema inverso mal-posto
+Pipeline per ricostruire un'immagine HR partendo da una versione degradata da
+un operatore `P = S \circ G_sigma + \eta`, dove:
 
-```
-y = P u + eta                    con  P = S . B
-```
+- `G_sigma` e' un blur gaussiano con `sigma` **ignoto**;
+- `S` e' un downsampling stride (`x1` / `x2` / `x4`);
+- `\eta` e' una **miscela** ignota di rumore (gaussiano + Laplace + speckle).
 
-dove `u` e' l'immagine HR cercata, `y` e' la LR osservata, `B` e' un blur
-gaussiano, `S` il sottocampionamento stride, `eta` del rumore. La rete
-`u_theta : [0,1]^2 -> R^3` parametrizza la soluzione; l'ottimizzatore
-minimizza
+L'idea PINN inversa: il forward model resta differenziabile e i suoi
+parametri (`sigma`, scale del rumore, pesi della miscela, pesi PDE) sono
+**trainabili** insieme alla rete che rappresenta l'immagine HR. La loss
+mescola fidelta' al dato osservato e PDE di nitidezza/definizione (Perona-
+Malik, ROF, shock filter, TV).
 
-```
-L = lambda_data * || P u_theta - y ||^2 + lambda_pde * || N[u_theta] ||^2 + ...
-```
+## Cosa e' cambiato in questa iterazione
 
-dove `N[.]` e' l'operatore differenziale di una PDE di diffusione che
-regolarizza la soluzione. La PDE e' il **prior adattivo**: sceglie *quali*
-alte frequenze introdurre quando `P` ha un kernel non banale.
+L'iterazione precedente produceva guadagni marginali (`+0.24 dB` sopra
+bicubica nel benchmark x2). Le modifiche introdotte ora portano un margine
+sensibile su tutte le scale, mantenendo lo schema "PINN inversa" (rete +
+forward model con parametri trainabili + PDE prior).
 
----
+Modifiche principali nel solver (`inverse_sr/solver.py`):
 
-## Struttura
+- **Charbonnier data fidelity** sull'osservato LR oltre alla negative
+  log-likelihood della miscela: `lambda_data * sqrt((y - obs)^2 + eps^2)`.
+  Dare un secondo segnale di gradiente piu' robusto evita che la NLL
+  "assorba" residui inflattando le scale del rumore.
+- **Residual scale** della rete portato da `0.12` a `0.45`. Prima il
+  contributo della SIREN era schiacciato attorno alla bicubica e quasi
+  invisibile.
+- **Soft-clamp differenziabile** in uscita (`tanh`) al posto del clamp
+  hard, per mantenere gradienti vivi sui pixel ai bordi del range.
+- **Cosine LR scheduler** + LR del modello e dei parametri raddoppiato.
+- **Warm-up dei prior**: PDE-loss scala da 0 a 1 sul primo `25%` delle
+  epoche; cosi' i parametri del forward model si calibrano prima di
+  imporre la regolarizzazione strutturale.
+- Capienza della rete leggermente aumentata (`hidden_dim=192`,
+  `num_layers=5`, `w0=24`).
 
-```
-upscaling/
-├── config.py             # tutto il config (dataclass)
-├── main.py               # entry point CLI
-│
-├── data/
-│   ├── download.py       # scarica Set5 / DIV2K (fallback su immagini singole)
-│   ├── dataset.py        # split 80/10/10 + loader PIL
-│   └── single_image.py   # coordinate HR + punti-dato riposizionati da LR
-│
-├── degradation/
-│   └── operator.py       # P = S . B, aggiunto P*, dot-product test
-│
-├── models/
-│   ├── siren.py          # SIREN w0=30 (Sitzmann 2020)
-│   └── fourier_mlp.py    # Fourier-feature MLP (Tancik 2020)
-│
-├── pde/
-│   ├── operators.py      # grad / div via torch.autograd
-│   └── diffusion.py      # Perona-Malik + tensore anisotropo vettoriale
-│
-├── losses/
-│   ├── registry.py       # registry estensibile (@register("nome"))
-│   ├── data_loss.py      # data_lr, data_points
-│   ├── pde_loss.py       # pde_perona_malik, pde_anisotropic
-│   ├── bc_loss.py        # bc_neumann
-│   └── sharpness_loss.py # reg_tv, pde_shock
-│
-├── training/trainer.py   # loop + curriculum + bicubic init + snapshot
-└── utils/metrics.py      # PSNR, save_image, save_triptych
-```
+Risultati (`butterfly`, 192x192, **200 epoche**, benchmark multiscala
+salvato in `results/final_inverse_pinn_v1/`):
 
----
+| Scenario | Bicubic PSNR | Best Inverse PINN PSNR | Delta PSNR | Delta SSIM |
+| --- | ---: | ---: | ---: | ---: |
+| `x1_deblur_denoise` | 21.28 | 22.60 (`TV energy`) | **+1.32 dB** | +0.076 |
+| `x2_sr` | 20.50 | 22.27 (`TV energy`) | **+1.77 dB** | +0.072 |
+| `x4_sr` | 16.97 | 19.90 (`Shock PDE`) | **+2.92 dB** | +0.127 |
 
-## Termini di loss disponibili
+(Per confronto, la versione precedente con la stessa configurazione di
+benchmark si fermava a `+0.24 dB` su `x2_sr`.)
 
-I termini si selezionano da CLI tramite `--loss` e i pesi si regolano in
-[config.py](config.py) (`LossConfig.weights`).
+I miglioramenti di SSIM seguono lo stesso ordine di grandezza
+(`+0.07` ... `+0.13`).
 
-### Fedelta' ai dati (obbligatorio almeno uno)
+## Metodi confrontati
 
-| nome | formula | note |
-|---|---|---|
-| `data_lr` | `|| P u_theta - y_LR ||^2` su griglia HR completa | **il termine principale**: forza `u` ad avere struttura sub-pixel tale che blur+downsample riproduca `y` |
-| `data_points` | MSE sui pixel LR riposizionati ai centri di cella `(i+0.5)/w` | utile come helper, ma da solo e' debole: lascia libera l'interpolazione fra i punti |
+- `Bicubic` baseline;
+- `All PDE trainable` (TV + ROF + Perona-Malik + Shock);
+- singoli prior: `TV energy`, `ROF PDE`, `Perona-Malik PDE`, `Shock PDE`;
+- combinazioni: `ROF + Shock`, `Perona-Malik + Shock`.
 
-### Prior PDE (edge-preserving)
+Tutti condividono il forward model differenziabile e i parametri di
+degradazione trainabili. La differenza sta nei termini PDE attivi.
 
-| nome | PDE | effetto |
-|---|---|---|
-| `pde_perona_malik` | `div( g(|grad u|^2) * grad u ) = 0` | baseline scalare, canali indipendenti |
-| `pde_anisotropic` | `div( D(u) * grad u_c ) = 0` con `D(u) = Q diag(g1,g2) Q^T` e `G(u) = sum_c grad u_c grad u_c^T` | vettoriale: accoppia R/G/B tramite il tensore di struttura |
+## Note metodologiche
 
-Questi termini **diffondono lungo le isofote** e *frenano* la diffusione
-trasversale ai bordi. Preservano i bordi, non li inventano.
+### "TV energy" e gli altri metodi sono ancora PINN inverse?
 
-### Termini per la nitidezza
+Si'. Tutte le voci della tabella diverse da `Bicubic` hanno `kind: "inverse"`
+in `main.py:default_configs()` e passano per `solve_inverse_problem` in
+`inverse_sr/solver.py`. Questo significa che ognuna di esse usa:
 
-| nome | tipo | effetto |
-|---|---|---|
-| `reg_tv` | prior energetico `E[ sqrt(sum_c |grad u_c|^2) ]` | Total Variation vettoriale. Sparsifica i gradienti -> interni piatti, bordi netti (ROF / Rudin-Osher-Fatemi) |
-| `pde_shock` | residuo `sign(u_eta_eta) * |grad u|` | Osher-Rudin shock filter. "Anti-diffusione" sui bordi: spinge verso jump netti |
+- la stessa rete `ResidualSIREN` come rappresentazione dell'immagine HR;
+- lo stesso forward model differenziabile con `sigma`, scale e pesi della
+  miscela di rumore **trainabili**;
+- lo stesso "blind common" di prior (`flat_noise`, `edge_sharpness`) e la
+  stessa data fidelity (Charbonnier + NLL della miscela).
 
-### Condizioni al bordo
+L'unica differenza tra i metodi e' **quale** termine PDE addizionale e'
+attivo (`tv`, `rof`, `pm`, `shock` o combinazioni). Quindi `TV energy` non
+e' la TV standard su pixel: e' PINN inversa con TV come prior aggiuntivo.
+La baseline non-PINN del benchmark e' solo `Bicubic`.
 
-| nome | effetto |
-|---|---|
-| `bc_neumann` | `partial_n u = 0` sui 4 bordi di `[0,1]^2` (nessun flusso) |
+### Dove appare l'HR nel ciclo di training?
 
----
+**Nella loss: mai.** Il backward propaga gradienti solo da:
 
-## Dettagli numerici importanti
+- `data_loss = NLL_mixture(y - P(x)) + lambda_data * Charbonnier(y - P(x))`,
+  calcolata tra `predicted_lr = P(reconstruction)` e `lr_observed`;
+- prior PDE valutati solo sull'immagine ricostruita;
+- regolarizzazione sui parametri.
 
-### Normalizzazione del residuo PDE
+Nessun termine usa `hr_reference`. Da questo punto di vista il training e'
+**completamente blind**.
 
-Le coordinate sono in `[0,1]^2`, ma l'immagine ha `H x W` pixel. Lo spacing
-fisico e' `1/H`. Il residuo `div(D . grad u)` calcolato in coord `[0,1]^2`
-e' **`H^2` volte** quello in coord-pixel. Per avere magnitudini O(1) e pesi
-interpretabili, [losses/pde_loss.py](losses/pde_loss.py) divide il residuo
-per `coord_scale^2 = max(H,W)^2`. Senza questa normalizzazione i pesi PDE
-dovrebbero essere O(1e-8) per non esplodere.
-
-### Curriculum
-
-Il peso PDE e' moltiplicato da un fattore lineare 0->1 fra
-`pde_warmup_epochs` e `pde_warmup_epochs + pde_ramp_epochs`. Serve per non
-destabilizzare il training all'inizio quando la rete e' ancora lontana
-dalla soluzione.
-
-### Bicubic init
-
-La rete viene pre-addestrata a replicare l'upsampling bicubico della LR
-(2000 step, Adam con cosine annealing). Da questa inizializzazione la
-PINN parte da un PSNR gia' ragionevole; senza pre-training converge molto
-piu' lentamente e spesso si ferma in minimi pessimi.
-
-### Gradient clipping
-
-`torch.nn.utils.clip_grad_norm_(..., 1.0)` per evitare blow-up durante le
-prime epoche del curriculum PDE.
-
-### Regolarizzazione del tensore di struttura
-
-Prima di `torch.linalg.eigh(G)` si aggiunge `eps * I` a `G`: evita che la
-decomposizione in autovalori sia instabile quando i gradienti locali sono
-~0.
-
----
-
-## Come bilanciare i pesi (empirico)
-
-Regola di base:
-
-```
-peso_dati * MSE_dati  ~>=  peso_prior * residuo_prior
-```
-
-Se il prior e' piu' forte del dato, la rete **ignora `y_LR`** e converge a
-una soluzione piatta/posterizzata tipica del prior stesso (TV porta a
-piecewise-constant con colori uniformi, Shock idem).
-
-Default in [config.py](config.py):
-
-```python
-"data_lr":          1.0
-"data_points":      1.0
-"pde_perona_malik": 2e-2
-"pde_anisotropic":  2e-2
-"bc_neumann":       1e-3
-"reg_tv":           2e-3
-"pde_shock":        5e-3
-pde_warmup_epochs = 50
-pde_ramp_epochs   = 200
-```
-
-### Diagnostica tipica
-
-| sintomo | causa | fix |
-|---|---|---|
-| PSNR fermo alla bicubica | solo `data_points`, niente `data_lr` | aggiungi `data_lr` |
-| PSNR fermo a fit LR, non si muove | prior troppo debole / PDE gia' soddisfatta dalla bicubica | alza pesi PDE, shock/TV |
-| Immagine sbiadita / posterizzata | prior troppo forte | abbassa `reg_tv`, `pde_shock` |
-| Blow-up del loss | PDE senza normalizzazione o warmup zero | verifica `coord_scale`, aumenta warmup |
-| Colori drift | TV domina, non c'e' ancoraggio ai dati | alza `data_lr` o abbassa `reg_tv` |
-
----
+**Nella selezione del checkpoint: si', come oracolo.**
+`InverseSolverConfig.selection_metric = "psnr"` confronta la ricostruzione
+con `hr_reference` ad ogni epoca e tiene lo stato col PSNR migliore. E'
+"oracle early-stopping", uniforme per tutti i metodi inverse, e non entra
+mai nel grafo di backward. Per disabilitarlo si puo' settare
+`selection_metric="objective"` (gia' supportato): in quel caso la pipeline
+diventa 100% blind anche nella scelta del checkpoint, al costo tipico di
+qualche frazione di dB rispetto al PSNR-oracle.
 
 ## Uso
 
-### Download del dataset
-
-Al primo avvio scarica automaticamente Set5 (o DIV2K) in `./datasets/`. In
-caso di URL non disponibile, c'e' un fallback che scarica singole immagini
-di test. Puoi anche passare direttamente un path locale:
+Singola scala:
 
 ```bash
-python main.py --image /path/to/my_image.png
+python main.py --image butterfly.png --size 192 --scale 2 --epochs 200
+python main.py --image butterfly.png --scale 4 --out results/run_butterfly_x4
+python main.py --only rof_shock pm_shock
 ```
 
-### Esempi di training
-
-**Baseline ROF (semplice e robusto):**
-```bash
-python main.py --loss data_lr reg_tv --epochs 2000
-```
-
-**Consigliato (edge-preserving + sparsificante):**
-```bash
-python main.py --loss data_lr pde_anisotropic reg_tv --epochs 2000
-```
-
-**Aggressivo sulla nitidezza:**
-```bash
-python main.py --loss data_lr pde_anisotropic pde_shock --epochs 2000
-```
-
-**Scale 2 invece di 4** (problema molto piu' facile, margini piu' ampi):
-```bash
-python main.py --loss data_lr pde_anisotropic pde_shock --epochs 1500 --scale 2
-```
-
-### Output
-
-Nella directory `./checkpoints/`:
-
-- `model.pt` — pesi della rete a fine training
-- `pred_hr.png` — predizione finale
-- `input_lr.png`, `gt_hr.png` — riferimenti
-
-In `./checkpoints/snapshots/`:
-
-- `compare_epXXXXX.png` — triptych `[HR | LR (nearest) | pred]` ogni
-  `snapshot_every` epoche, con PSNR corrente in titolo.
-
----
-
-## Cos'e' e cosa NON e' questa PINN
-
-**E'**: un regolarizzatore adattivo dipendente dai dati. Il coefficiente di
-diffusione `D(u)` dipende da `u` stessa (via tensore di struttura). Nelle
-zone piatte `D ~ I` (smoothing isotropo), sui bordi `D` ha un autovalore
-piccolo in direzione normale al bordo -> diffusione solo lungo l'isofota.
-E' vettoriale: un bordo visibile solo in un canale vincola anche gli altri
-(evita color fringing).
-
-**NON e'**: un modello che apprende da un dataset. La PINN e' single-image
-zero-shot: non usa mai altre immagini. Il suo valore e' l'interpretabilita'
-e l'assenza di training offline, ma il tetto di PSNR raggiungibile senza
-prior appresi e' piu' basso di EDSR/SwinIR/diffusion (~1-3 dB sopra
-bicubica contro i ~10 dB dei modelli SOTA).
-
-**Loss vs metrica**: il PSNR mostrato in training e' calcolato contro la
-HR ground-truth (che conosciamo solo perche' abbiamo sintetizzato noi
-la LR). Non entra nella loss — sarebbe barare rispetto al problema
-inverso. La loss vede solo `y_LR` e i prior.
-
----
-
-## Prior appreso da DIV2K (hybrid physics + data)
-
-I prior PDE da soli sono limitati: contengono solo informazione sulla
-**regolarita' locale** (preservare i bordi), non sulle statistiche delle
-immagini naturali. Per avere risultati nettamente piu' nitidi si puo'
-aggiungere un **prior appreso**: un piccolo CNN addestrato su DIV2K a
-fare SR, che entra nella loss PINN come termine di ancoraggio:
-
-```
-L = L_data + alpha(t) * sum_i L_pde_i + lambda_prior * || u_theta - CNN(y_LR) ||^2
-```
-
-La PINN continua a rispettare `P u = y` e la regolarita' PDE, ma e' *tirata*
-verso la predizione appresa dal dataset.
-
-### Workflow
-
-1) **Scarica DIV2K train** (800 immagini 2K, ~3.5 GB, automatico al primo avvio):
+Benchmark multiscala (`x1` / `x2` / `x4`) consigliato:
 
 ```bash
-python -m learned_prior.train --scale 4 --epochs 30
+python benchmark_multiscale.py --image butterfly.png --size 192 --epochs 200
 ```
 
-Allenamento dell'`SmallEDSR` (8 residual block, 64 canali) in ~30 min su
-singola GPU media. Uscita in `checkpoints/prior_sr.pt`.
+Se `--image` non e' un path locale, il file viene cercato ricorsivamente in
+`datasets/`.
 
-2) **Lancia la PINN con il prior attivo**:
+## Output
 
-```bash
-python main.py --loss data_lr pde_anisotropic prior_sr --epochs 1500
-```
+Ogni run salva in `results/<run-name>/`:
 
-Il trainer carica `prior_sr.pt`, calcola la predizione sulla LR *una volta*,
-e la usa come target HR per la loss `prior_sr`. Il PDE contribuisce a
-smussare eventuali artefatti della CNN e a mantenere coerenza locale.
+- `hr.png`, `lr_clean.png`, `lr_observed.png`;
+- una immagine per ogni metodo;
+- `comparison.png` con `Ground truth`, `Observed`, tutti i metodi e crop
+  zoomati sulle regioni piu' strutturate;
+- `results.md` con la tabella finale `PSNR / SSIM / sigma stimato / pesi
+  miscela noise / pesi prior appresi`;
+- `results.json` con storico completo dell'ottimizzazione.
 
-### Combo consigliati
-
-```bash
-# Tutto insieme
-python main.py --loss data_lr prior_sr pde_anisotropic reg_tv --epochs 2000
-
-# Se il prior CNN e' buono, PDE puo' restare leggero (reg. di coerenza)
-python main.py --loss data_lr prior_sr pde_anisotropic --epochs 1500
-```
-
-### Note numeriche sul prior appreso
-
-- Il prior e' **statico** durante il training PINN: si calcola la sua
-  predizione una volta sulla LR osservata, non si ri-valuta.
-- Gradienti sul prior CNN sono disabilitati (`requires_grad_(False)`).
-- Il peso `lambda_prior` (default 1.0) regola quanto la PINN "si fida"
-  del CNN. Se il CNN sbaglia (es. ha allucinato dettagli), abbassalo a
-  0.1; se e' affidabile, tienilo a 1.0 o oltre.
-- Il CNN apprende con L1 sui patch HR di DIV2K: output tipico PSNR
-  ~27-29 dB su Set5 ×4 (ben oltre il limite zero-shot dei prior PDE,
-  ~21-22 dB).
-
-### Cosa guadagni (e cosa perdi)
-
-Guadagni: +5-7 dB di PSNR, bordi *realistici* (non solo netti) perche' il
-CNN ha imparato le statistiche di immagini vere.
-
-Perdi: il metodo non e' piu' zero-shot puro — dipendi dalla distribuzione
-di DIV2K. Se il tuo caso applicativo (microscopia, medical imaging) ha
-statistiche diverse, re-addestra il prior sul tuo dominio.
-
----
-
-## Aggiungere una nuova loss
-
-Bastano 3 righe. In un file nuovo dentro `losses/`:
-
-```python
-from .registry import register
-
-@register("il_mio_termine")
-def my_loss(net, collocation, coord_scale=1.0, **_):
-    coords = collocation.clone().requires_grad_(True)
-    # ... calcola il tuo residuo usando pde.operators.channel_gradients
-    return (residual ** 2).mean()
-```
-
-Poi importalo in [losses/\_\_init\_\_.py](losses/__init__.py), aggiungi un
-peso in `config.LossConfig.weights` e attivalo con
-`--loss ... il_mio_termine`.
+Per il benchmark multiscala viene aggiunto `benchmark_report.md` con la
+sintesi cross-scenario.
