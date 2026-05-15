@@ -33,10 +33,10 @@ SCENARIOS = [
         key="x1_deblur_denoise",
         scale=1,
         sigma_true=1.35,
-        note="Restauro x1: nessun downsampling, ma blur gaussiano ignoto + noise.",
+        note="x1 restoration: no downsampling, but unknown Gaussian blur + noise.",
     ),
-    Scenario(key="x2_sr", scale=2, sigma_true=1.35, note="Super-resolution x2 con blur gaussiano ignoto + noise."),
-    Scenario(key="x4_sr", scale=4, sigma_true=1.35, note="Super-resolution x4 con blur gaussiano ignoto + noise."),
+    Scenario(key="x2_sr", scale=2, sigma_true=1.35, note="x2 super-resolution with unknown Gaussian blur + noise."),
+    Scenario(key="x4_sr", scale=4, sigma_true=1.35, note="x4 super-resolution with unknown Gaussian blur + noise."),
 ]
 
 
@@ -47,8 +47,8 @@ def observed_title(scale: int) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark multiscala sperimentale: riduce i prior comuni e congela "
-            "forward model / prior trainabili dopo il warm-up."
+            "Experimental multiscale benchmark: reduces shared priors and freezes "
+            "the forward model / trainable priors after warm-up."
         )
     )
     parser.add_argument("--image", type=str, default="butterfly.png")
@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
         "--scenarios",
         nargs="+",
         default=None,
-        help="Subset di scenari da eseguire, usando i key definiti in SCENARIOS.",
+        help="Subset of scenarios to run, using the keys defined in SCENARIOS.",
     )
     parser.add_argument("--out", type=str, default=None)
     return parser.parse_args()
@@ -136,22 +136,22 @@ def _write_scale_report(
     lines = [
         f"# {scenario.key}",
         "",
-        f"- Immagine: `{image_path}`",
+        f"- Image: `{image_path}`",
         f"- Device: `{device}`",
-        f"- Scala: `{scenario.scale}`",
-        f"- Nota: {scenario.note}",
-        f"- Sigma reale blur: `{degradation.sigma:.4f}`",
+        f"- Scale: `{scenario.scale}`",
+        f"- Note: {scenario.note}",
+        f"- Ground-truth blur sigma: `{degradation.sigma:.4f}`",
         f"- common_prior_scale: `{args.common_prior_scale}`",
         f"- freeze_after_frac: `{args.freeze_after_frac}`",
         (
-            "- Noise reale: "
+            "- Ground-truth noise: "
             f"weights={_format_tuple(degradation.noise.weights)}, "
             f"gaussian_std={degradation.noise.gaussian_std:.4f}, "
             f"laplace_scale={degradation.noise.laplace_scale:.4f}, "
             f"speckle_std={degradation.noise.speckle_std:.4f}"
         ),
         "",
-        "| Metodo | PSNR | Delta PSNR vs Bicubic | SSIM | Delta SSIM vs Bicubic | Sigma stimato | Noise weights |",
+        "| Method | PSNR | Delta PSNR vs Bicubic | SSIM | Delta SSIM vs Bicubic | Estimated sigma | Noise weights |",
         "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
 
@@ -172,7 +172,7 @@ def _write_scale_report(
             f"{row['sigma']} | {row['noise_weights']} |"
         )
 
-    lines.extend(["", "## Pesi prior appresi", ""])
+    lines.extend(["", "## Learned Prior Weights", ""])
     found = False
     for payload in methods_payload.values():
         prior_weights = payload.get("prior_weights")
@@ -182,7 +182,7 @@ def _write_scale_report(
         pretty = ", ".join(f"{key}={value:.4g}" for key, value in prior_weights.items())
         lines.append(f"- {payload.get('display_name', 'method')}: {pretty}")
     if not found:
-        lines.append("- Nessun prior trainabile in questo scenario.")
+        lines.append("- No trainable priors in this scenario.")
 
     (scenario_dir / "results.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -197,16 +197,16 @@ def _build_master_report(
     args: argparse.Namespace,
 ) -> None:
     lines = [
-        "# Benchmark Multiscala Inverse PINN Stabilized",
+        "# Stabilized Inverse PINN Multiscale Benchmark",
         "",
-        f"- Immagine: `{image_path}`",
-        f"- Resize HR: `{size}x{size}`",
-        f"- Epoche per metodo: `{epochs}`",
+        f"- Image: `{image_path}`",
+        f"- HR resize: `{size}x{size}`",
+        f"- Epochs per method: `{epochs}`",
         f"- Device: `{device}`",
         f"- common_prior_scale: `{args.common_prior_scale}`",
         f"- freeze_after_frac: `{args.freeze_after_frac}`",
         "",
-        "## Sintesi",
+        "## Summary",
         "",
         "| Scenario | Best PSNR | Best SSIM | Bicubic PSNR | Bicubic SSIM | File |",
         "| --- | --- | --- | ---: | ---: | --- |",
@@ -224,7 +224,7 @@ def _build_master_report(
             f"[results.md]({out_dir / scenario_key / 'results.md'}) |"
         )
 
-    lines.extend(["", "## Confronto Per Scenario", ""])
+    lines.extend(["", "## Scenario Comparison", ""])
 
     for scenario_key, payload in scenario_results.items():
         scenario = payload["scenario"]
@@ -232,10 +232,10 @@ def _build_master_report(
         lines.extend([
             f"### {scenario_key}",
             "",
-            f"- Nota: {scenario.note}",
+            f"- Note: {scenario.note}",
             f"- Comparison: [comparison.png]({out_dir / scenario_key / 'comparison.png'})",
             "",
-            "| Metodo | PSNR | Delta PSNR vs Bicubic | SSIM | Delta SSIM vs Bicubic | Sigma stimato | Noise weights |",
+            "| Method | PSNR | Delta PSNR vs Bicubic | SSIM | Delta SSIM vs Bicubic | Estimated sigma | Noise weights |",
             "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
         ])
         bic_psnr = next(row["psnr"] for row in rows if row["name"] == "Bicubic")
@@ -246,7 +246,7 @@ def _build_master_report(
                 f"{row['ssim']:.4f} | {row['ssim'] - bic_ssim:+.4f} | "
                 f"{row['sigma']} | {row['noise_weights']} |"
             )
-        lines.extend(["", "Pesi prior appresi:", ""])
+        lines.extend(["", "Learned prior weights:", ""])
         found = False
         for method_id, method_payload in payload["methods"].items():
             prior_weights = method_payload.get("prior_weights")
@@ -257,7 +257,7 @@ def _build_master_report(
             pretty = ", ".join(f"{key}={value:.4g}" for key, value in prior_weights.items())
             lines.append(f"- {display_name}: {pretty}")
         if not found:
-            lines.append("- Nessun prior trainabile.")
+            lines.append("- No trainable priors.")
         lines.append("")
 
     (out_dir / "benchmark_report.md").write_text("\n".join(lines), encoding="utf-8")
@@ -283,7 +283,7 @@ def main() -> None:
         selected_scenarios = [scenario for scenario in SCENARIOS if scenario.key.lower() in allowed]
         if not selected_scenarios:
             available = ", ".join(scenario.key for scenario in SCENARIOS)
-            raise RuntimeError(f"Nessuno scenario valido selezionato. Disponibili: {available}")
+            raise RuntimeError(f"No valid scenario selected. Available: {available}")
 
     for scenario in selected_scenarios:
         print(f"\n===== {scenario.key} =====")
@@ -443,7 +443,7 @@ def main() -> None:
         scenario_results=scenario_results,
         args=args,
     )
-    print(f"\n[done] report salvato in {out_dir}")
+    print(f"\n[done] report saved in {out_dir}")
 
 
 if __name__ == "__main__":

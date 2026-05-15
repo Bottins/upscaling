@@ -35,13 +35,13 @@ def pick_image(image_arg: str | None, dataset_root: Path) -> Path:
             matches = [p for p in dataset_root.rglob("*") if p.name.lower() == image_arg.lower()]
             if matches:
                 return matches[0].resolve()
-        raise FileNotFoundError(f"Immagine non trovata: {image_arg}")
+        raise FileNotFoundError(f"Image not found: {image_arg}")
 
     if not dataset_root.exists():
-        raise FileNotFoundError(f"Dataset root non trovato: {dataset_root}")
+        raise FileNotFoundError(f"Dataset root not found: {dataset_root}")
     images = list_images(dataset_root)
     if not images:
-        raise RuntimeError(f"Nessuna immagine trovata in {dataset_root}")
+        raise RuntimeError(f"No image found in {dataset_root}")
     for image in images:
         if image.name.lower() == "butterfly.png":
             return image.resolve()
@@ -179,7 +179,7 @@ def _draw_history_plot(
 
 def save_comparison_strip(entries: list[dict], path: Path) -> None:
     if not entries:
-        raise ValueError("Nessuna entry da salvare nel comparison.")
+        raise ValueError("No entry to save in the comparision.")
 
     title_font = _load_font(20)
     body_font = _load_font(16)
