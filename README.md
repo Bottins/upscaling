@@ -37,7 +37,6 @@ At a high level, the method represents the unknown HR image with a coordinate ML
 |-- results/
 |   |-- final_inverse_pinn_v1_size256/
 |   `-- final_inverse_pinn_v1_size256_stabilized/
-`-- denoise_results/
 ```
 
 ## Method Overview
